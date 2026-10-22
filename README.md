@@ -1,5 +1,8 @@
 # Better Codex Info
 
+[![CI](https://github.com/HaoYangJin/Better-Codex/actions/workflows/ci.yml/badge.svg)](https://github.com/HaoYangJin/Better-Codex/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/HaoYangJin/Better-Codex?display_name=tag)](https://github.com/HaoYangJin/Better-Codex/releases)
+
 Better Codex Info 是一个本地优先的 Codex 会话分析伴随层。它在 Codex 输入框底部显示轮次、Token、缓存命中、输出速度和上下文占用，并可在原地展开完整的会话与历史分析面板。
 
 应用不会修改 Codex 安装包，不会读取 OAuth 凭据，也不会发送会话数据到网络。
