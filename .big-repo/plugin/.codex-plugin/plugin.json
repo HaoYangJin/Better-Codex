@@ -1,0 +1,10 @@
+{
+  "name": "big-repo",
+  "version": "2.1.0",
+  "description": "由 AI 客户端按开发需求与反馈触发，配置一次后自动完成项目维护、验证和仓库交付。",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Big-Repo",
+    "shortDescription": "配置一次，需求与反馈触发，AI 自动维护并交付仓库"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "trigger": "task-or-feedback",
+  "plugin_path": ".big-repo/plugin",
+  "repository": null,
+  "base_branch": "main",
+  "delivery": "commit",
+  "release": "explicit-request",
+  "clients": [],
+  "enabled": true,
+  "policy_confirmed": true,
+  "profile": "core",
+  "showcase": "none",
+  "runtime_version": "2.1.0",
+  "policy_record": {
+    "source": "explicit-init",
+    "recorded_at": "2026-10-22T12:12:09+00:00"
+  },
+  "validation": [
+    {
+      "id": "check-1",
+      "argv": [
+        "pnpm",
+        "run",
+        "typecheck"
+      ]
+    },
+    {
+      "id": "check-2",
+      "argv": [
+        "pnpm",
+        "test"
+      ]
+    },
+    {
+      "id": "check-3",
+      "argv": [
+        "pnpm",
+        "run",
+        "build"
+      ]
+    }
+  ],
+  "ci_policy": "required",
+  "required_checks": []
+}
