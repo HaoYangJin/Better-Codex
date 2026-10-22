@@ -4,6 +4,7 @@ release/
 coverage/
 playwright-report/
 test-results/
+.big-repo/plugin/
 *.log
 *.sqlite
 *.sqlite3
