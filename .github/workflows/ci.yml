@@ -38,6 +38,27 @@ jobs:
         run: pnpm exec electron-builder --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Verify update metadata references built assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const releaseDir = path.join(process.cwd(), 'release');
+          const manifests = fs.readdirSync(releaseDir).filter(name => /^latest.*\.yml$/.test(name));
+          for (const manifest of manifests) {
+            const text = fs.readFileSync(path.join(releaseDir, manifest), 'utf8');
+            const entries = [...text.matchAll(/^\s*-\s*url:\s*(.+)\s*$/gm)].map(match => match[1].trim());
+            const singlePath = text.match(/^path:\s*(.+)\s*$/m)?.[1]?.trim();
+            const referenced = new Set([...entries, ...(singlePath ? [singlePath] : [])]);
+            for (const file of referenced) {
+              if (!fs.existsSync(path.join(releaseDir, path.basename(file)))) {
+                throw new Error(`${manifest} references missing asset ${file}`);
+              }
+            }
+          }
+          NODE
       - uses: actions/upload-artifact@v4
         with:
           name: better-codex-info-${{ matrix.os }}

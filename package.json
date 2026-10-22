@@ -69,6 +69,7 @@
     },
     "win": {
       "icon": "build/icon.ico",
+      "artifactName": "Better-Codex-Info-Setup-${version}.${ext}",
       "target": [
         "nsis"
       ]
@@ -80,6 +81,7 @@
     },
     "mac": {
       "icon": "build/icon.png",
+      "artifactName": "Better-Codex-Info-${version}-${arch}.${ext}",
       "category": "public.app-category.developer-tools",
       "target": [
         {

@@ -74,7 +74,7 @@ pnpm run dist:win
 pnpm run dist:mac
 ```
 
-Windows 生成 NSIS 安装包。macOS 生成 x64 与 arm64 的 DMG/ZIP；没有 Developer ID 证书时产物未签名，正式分发前需要完成签名和公证。
+Windows 生成 NSIS 安装包。macOS 生成 x64 与 arm64 的 DMG/ZIP；没有 Developer ID 证书时产物未签名，正式分发前需要完成签名和公证。Release 文件名采用 `Better-Codex-Info-Setup-0.1.0.exe` 与 `Better-Codex-Info-0.1.0-<arch>.dmg/zip`。
 
 ## 已知限制
 
