@@ -141,9 +141,13 @@ export class CodexRepository extends EventEmitter {
       return { overview: emptyOverview(), series: [], sessions: [] }
     }
     const sessions = this.querySessions(filter)
-    const turns = this.queryTurnsForSessions(sessions.map((session) => session.id))
+    const turns = this.queryTurnsForSessions(
+      sessions.map((session) => session.id),
+      filter
+    )
+    const useTurnUsage = filter.from != null || filter.to != null
     return {
-      overview: aggregateOverview(sessions, turns),
+      overview: aggregateOverview(sessions, turns, useTurnUsage),
       series: aggregateSeries(sessions, turns),
       sessions
     }
@@ -171,11 +175,18 @@ export class CodexRepository extends EventEmitter {
         series: []
       }
     }
-    const analytics = this.getHistory(filter)
+    const sessions = this.querySessions(filter)
     const turns = this.queryTurnsForSessions(
-      analytics.sessions.map((session) => session.id)
-    ).map((turn) => ({ ...turn, sessionId: turn.sessionId }))
-    return { ...analytics, turns }
+      sessions.map((session) => session.id),
+      filter
+    )
+    const overview = aggregateOverview(
+      sessions,
+      turns,
+      filter.from != null || filter.to != null
+    )
+    const series = aggregateSeries(sessions, turns)
+    return { overview, series, sessions, turns }
   }
 
   private initialize(): void {
@@ -257,7 +268,7 @@ export class CodexRepository extends EventEmitter {
   private async scan(): Promise<void> {
     if (this.scanning) return
     this.scanning = true
-    this.emit('indexing', true)
+    let changed = false
     try {
       const files = await listSessionFiles(this.codexPaths)
       const existing = new Map(
@@ -297,6 +308,10 @@ export class CodexRepository extends EventEmitter {
             parsed.snapshot,
             parsed.turns
           )
+          if (!changed) {
+            changed = true
+            this.emit('indexing', true)
+          }
           if (index % 5 === 0) await new Promise((resolve) => setImmediate(resolve))
         } catch (error) {
           this.warnings.add(
@@ -308,15 +323,21 @@ export class CodexRepository extends EventEmitter {
       const knownPaths = new Set(files)
       for (const path of existing.keys()) {
         if (!knownPaths.has(path)) {
+          if (!changed) {
+            changed = true
+            this.emit('indexing', true)
+          }
           this.database.prepare('delete from turns where session_id in (select id from sessions where path = ?)').run(path)
           this.database.prepare('delete from sessions where path = ?').run(path)
         }
       }
-      this.indexedAt = Date.now()
-      this.emit('updated', this.getSnapshot())
+      if (changed) {
+        this.indexedAt = Date.now()
+        this.emit('updated', this.getSnapshot())
+      }
     } finally {
       this.scanning = false
-      this.emit('indexing', false)
+      if (changed) this.emit('indexing', false)
     }
   }
 
@@ -467,32 +488,36 @@ export class CodexRepository extends EventEmitter {
     const clauses = ['1 = 1']
     const params: Array<string | number> = []
     if (filter.sessionKind === 'main' || (filter.sessionKind !== 'subagent' && !filter.includeSubagents)) {
-      clauses.push('is_subagent = 0')
+      clauses.push('sessions.is_subagent = 0')
     } else if (filter.sessionKind === 'subagent') {
-      clauses.push('is_subagent = 1')
+      clauses.push('sessions.is_subagent = 1')
     }
-    if (filter.from != null) {
-      clauses.push('updated_at >= ?')
-      params.push(filter.from)
-    }
-    if (filter.to != null) {
-      clauses.push('updated_at <= ?')
-      params.push(filter.to)
+    if (filter.from != null || filter.to != null) {
+      const range = ['filter_turn.session_id = sessions.id']
+      if (filter.from != null) {
+        range.push('filter_turn.started_at >= ?')
+        params.push(filter.from)
+      }
+      if (filter.to != null) {
+        range.push('filter_turn.started_at <= ?')
+        params.push(filter.to)
+      }
+      clauses.push(`exists (select 1 from turns filter_turn where ${range.join(' and ')})`)
     }
     if (filter.project) {
-      clauses.push('project_name = ?')
+      clauses.push('sessions.project_name = ?')
       params.push(filter.project)
     }
     if (filter.model) {
-      clauses.push('model = ?')
+      clauses.push('sessions.model = ?')
       params.push(filter.model)
     }
     if (filter.reasoningEffort) {
-      clauses.push('reasoning_effort = ?')
+      clauses.push('sessions.reasoning_effort = ?')
       params.push(filter.reasoningEffort)
     }
     if (filter.search) {
-      clauses.push('(title like ? or project_name like ? or model like ?)')
+      clauses.push('(sessions.title like ? or sessions.project_name like ? or sessions.model like ?)')
       const search = `%${filter.search}%`
       params.push(search, search, search)
     }
@@ -500,7 +525,7 @@ export class CodexRepository extends EventEmitter {
     const limit = Math.min(10_000, Math.max(1, filter.limit ?? 2_000))
     const rows = this.database
       .prepare(
-        `select snapshot_json from sessions where ${clauses.join(' and ')} order by updated_at desc limit ?`
+        `select snapshot_json from sessions where ${clauses.join(' and ')} order by sessions.updated_at desc limit ?`
       )
       .all(...params, limit)
     return rows.map((row) => {
@@ -510,7 +535,8 @@ export class CodexRepository extends EventEmitter {
   }
 
   private queryTurnsForSessions(
-    sessionIds: string[]
+    sessionIds: string[],
+    filter?: HistoryFilter
   ): Array<TurnMetrics & { sessionId: string }> {
     if (sessionIds.length === 0) return []
     const output: Array<TurnMetrics & { sessionId: string }> = []
@@ -518,11 +544,21 @@ export class CodexRepository extends EventEmitter {
     for (let index = 0; index < sessionIds.length; index += chunkSize) {
       const ids = sessionIds.slice(index, index + chunkSize)
       const placeholders = ids.map(() => '?').join(',')
+      const range: string[] = []
+      const rangeParams: number[] = []
+      if (filter?.from != null) {
+        range.push('and started_at >= ?')
+        rangeParams.push(filter.from)
+      }
+      if (filter?.to != null) {
+        range.push('and started_at <= ?')
+        rangeParams.push(filter.to)
+      }
       const rows = this.database
         .prepare(
-          `select session_id, data_json from turns where session_id in (${placeholders}) order by started_at asc`
+          `select session_id, data_json from turns where session_id in (${placeholders}) ${range.join(' ')} order by started_at asc`
         )
-        .all(...ids)
+        .all(...ids, ...rangeParams)
       for (const row of rows) {
         const typed = row as { session_id: string; data_json: string }
         output.push({
@@ -609,18 +645,30 @@ function withoutSnapshotFields(snapshot: SessionSnapshot): SessionSummary {
 
 function aggregateOverview(
   sessions: SessionSummary[],
-  turns: Array<TurnMetrics & { sessionId: string }>
+  turns: Array<TurnMetrics & { sessionId: string }>,
+  useTurnUsage = false
 ): AnalyticsOverview {
-  const usage = sessions.reduce(
-    (total, session) => ({
-      input: total.input + session.usage.input,
-      cached: total.cached + session.usage.cachedInput,
-      output: total.output + session.usage.output,
-      reasoning: total.reasoning + session.usage.reasoningOutput,
-      total: total.total + session.usage.total
-    }),
-    { input: 0, cached: 0, output: 0, reasoning: 0, total: 0 }
-  )
+  const usage = useTurnUsage
+    ? turns.reduce(
+        (total, turn) => ({
+          input: total.input + turn.usage.input,
+          cached: total.cached + turn.usage.cachedInput,
+          output: total.output + turn.usage.output,
+          reasoning: total.reasoning + turn.usage.reasoningOutput,
+          total: total.total + turn.usage.total
+        }),
+        { input: 0, cached: 0, output: 0, reasoning: 0, total: 0 }
+      )
+    : sessions.reduce(
+        (total, session) => ({
+          input: total.input + session.usage.input,
+          cached: total.cached + session.usage.cachedInput,
+          output: total.output + session.usage.output,
+          reasoning: total.reasoning + session.usage.reasoningOutput,
+          total: total.total + session.usage.total
+        }),
+        { input: 0, cached: 0, output: 0, reasoning: 0, total: 0 }
+      )
   const weightedTtft = turns.filter(
     (turn): turn is TurnMetrics & { sessionId: string; ttftMs: number } => turn.ttftMs != null
   )
@@ -635,9 +683,15 @@ function aggregateOverview(
 
   return {
     sessions: sessions.length,
-    rounds: sessions.reduce((total, session) => total + session.rounds, 0),
-    steps: sessions.reduce((total, session) => total + session.steps, 0),
-    toolCalls: sessions.reduce((total, session) => total + session.toolCalls, 0),
+    rounds: useTurnUsage
+      ? turns.length
+      : sessions.reduce((total, session) => total + session.rounds, 0),
+    steps: useTurnUsage
+      ? turns.reduce((total, turn) => total + turn.requests, 0)
+      : sessions.reduce((total, session) => total + session.steps, 0),
+    toolCalls: useTurnUsage
+      ? turns.reduce((total, turn) => total + turn.toolCalls, 0)
+      : sessions.reduce((total, session) => total + session.toolCalls, 0),
     totalTokens: usage.total,
     inputTokens: usage.input,
     cachedInput: usage.cached,

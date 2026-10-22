@@ -48,7 +48,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   app.on('second-instance', () => {
-    overlay?.setSurface('collapsed')
+    setOverlaySurface('collapsed')
   })
 
   app.whenReady().then(bootstrap).catch((error) => {
@@ -198,12 +198,17 @@ function registerIpc(): void {
 
   ipcMain.handle('overlay:hide', async () => overlay?.hideTemporarily())
   ipcMain.handle('overlay:set-surface', async (_event, surface: OverlaySurface) => {
-    overlay?.setSurface(surface)
+    setOverlaySurface(surface)
   })
 }
 
 function broadcastSnapshot(): void {
   overlay?.getWindow()?.webContents.send('info:snapshot-updated', repository?.getSnapshot() ?? null)
+}
+
+function setOverlaySurface(surface: OverlaySurface): void {
+  overlay?.setSurface(surface)
+  overlay?.getWindow()?.webContents.send('overlay:surface-updated', surface)
 }
 
 function applySettings(settings: AppSettings): void {
@@ -233,7 +238,7 @@ function rebuildTrayMenu(): void {
       },
       {
         label: '打开分析中心',
-        click: () => overlay?.setSurface('analysis')
+        click: () => setOverlaySurface('analysis')
       },
       { type: 'separator' },
       {

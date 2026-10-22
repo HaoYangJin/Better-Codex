@@ -38,10 +38,12 @@ export function App() {
 
     const offSnapshot = window.betterCodexInfo.onSnapshot((next) => setSnapshot(next))
     const offIndex = window.betterCodexInfo.onIndexState(setIndexing)
+    const offSurface = window.betterCodexInfo.onSurface((next) => setSurfaceState(next))
     return () => {
       alive = false
       offSnapshot()
       offIndex()
+      offSurface()
     }
   }, [])
 

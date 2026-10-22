@@ -42,6 +42,12 @@ const api: BetterCodexInfoApi = {
       listener(indexing)
     ipcRenderer.on('info:index-state', callback)
     return () => ipcRenderer.removeListener('info:index-state', callback)
+  },
+  onSurface: (listener) => {
+    const callback = (_event: Electron.IpcRendererEvent, surface: OverlaySurface): void =>
+      listener(surface)
+    ipcRenderer.on('overlay:surface-updated', callback)
+    return () => ipcRenderer.removeListener('overlay:surface-updated', callback)
   }
 }
 

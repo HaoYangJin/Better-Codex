@@ -88,6 +88,7 @@ export function AnalysisCenter({
   const [effort, setEffort] = useState('')
   const [sessionKind, setSessionKind] = useState<'all' | 'main' | 'subagent'>('all')
   const [search, setSearch] = useState('')
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const projects = useMemo(
     () => unique(analytics.sessions.map((session) => session.projectName)),
@@ -125,9 +126,16 @@ export function AnalysisCenter({
     }
     let alive = true
     const timer = window.setTimeout(() => {
-      void window.betterCodexInfo.queryHistory(filter).then((result) => {
-        if (alive) setAnalytics(result)
-      })
+      void window.betterCodexInfo
+        .queryHistory(filter)
+        .then((result) => {
+          if (!alive) return
+          setAnalytics(result)
+          setActionError(null)
+        })
+        .catch((error) => {
+          if (alive) setActionError(errorMessage(error))
+        })
     }, 180)
     return () => {
       alive = false
@@ -142,9 +150,16 @@ export function AnalysisCenter({
       return
     }
     let alive = true
-    void window.betterCodexInfo.queryTurns(sessionId).then((items) => {
-      if (alive) setTurns(items)
-    })
+    void window.betterCodexInfo
+      .queryTurns(sessionId)
+      .then((items) => {
+        if (!alive) return
+        setTurns(items)
+        setActionError(null)
+      })
+      .catch((error) => {
+        if (alive) setActionError(errorMessage(error))
+      })
     return () => {
       alive = false
     }
@@ -157,32 +172,42 @@ export function AnalysisCenter({
     const target = selectedId || snapshot?.id
     if (!target) return
     const nextPinned = settings.pinnedSessionId === target ? null : target
-    const next = await window.betterCodexInfo.pinSession(nextPinned)
-    onSettings(next)
-    if (nextPinned) {
-      const updated = await window.betterCodexInfo.querySnapshot(target)
-      onSnapshot(updated)
-    } else {
-      onSnapshot(await window.betterCodexInfo.querySnapshot())
+    try {
+      const next = await window.betterCodexInfo.pinSession(nextPinned)
+      onSettings(next)
+      if (nextPinned) {
+        const updated = await window.betterCodexInfo.querySnapshot(target)
+        onSnapshot(updated)
+      } else {
+        onSnapshot(await window.betterCodexInfo.querySnapshot())
+      }
+      setActionError(null)
+    } catch (error) {
+      setActionError(errorMessage(error))
     }
   }
 
   const exportData = async (format: 'csv' | 'json'): Promise<void> => {
     const from =
       rangeDays > 0 ? Date.now() - rangeDays * 24 * 60 * 60 * 1_000 : undefined
-    await window.betterCodexInfo.exportData({
-      format,
-      filter: {
-        from,
-        project: project || undefined,
-        model: model || undefined,
-        reasoningEffort: effort || undefined,
-        sessionKind,
-        search: search.trim() || undefined,
-        includeSubagents: settings.includeSubagents,
-        limit: 10_000
-      }
-    })
+    try {
+      await window.betterCodexInfo.exportData({
+        format,
+        filter: {
+          from,
+          project: project || undefined,
+          model: model || undefined,
+          reasoningEffort: effort || undefined,
+          sessionKind,
+          search: search.trim() || undefined,
+          includeSubagents: settings.includeSubagents,
+          limit: 10_000
+        }
+      })
+      setActionError(null)
+    } catch (error) {
+      setActionError(errorMessage(error))
+    }
   }
 
   return (
@@ -278,6 +303,7 @@ export function AnalysisCenter({
       </div>
 
       <main className="analysis-content">
+        {actionError ? <div className="action-error">{actionError}</div> : null}
         {tab === 'overview' ? (
           <Overview
             overview={analytics.overview}
@@ -668,18 +694,24 @@ function SettingsPanel({
 }) {
   const [draft, setDraft] = useState(settings)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => setDraft(settings), [settings])
 
   const save = async (): Promise<void> => {
-    const next = await window.betterCodexInfo.updateSettings({
-      ...draft,
-      onboardingComplete: true
-    })
-    setDraft(next)
-    onSettings(next)
-    setSaved(true)
-    window.setTimeout(() => setSaved(false), 1_500)
+    try {
+      const next = await window.betterCodexInfo.updateSettings({
+        ...draft,
+        onboardingComplete: true
+      })
+      setDraft(next)
+      onSettings(next)
+      setSaved(true)
+      setSaveError(null)
+      window.setTimeout(() => setSaved(false), 1_500)
+    } catch (error) {
+      setSaveError(errorMessage(error))
+    }
   }
 
   return (
@@ -819,7 +851,9 @@ function SettingsPanel({
       </section>
 
       <footer className="settings-footer">
-        <span className="muted">{saved ? '设置已保存' : '更改会保存在本机'}</span>
+        <span className={saveError ? 'error-text' : 'muted'}>
+          {saveError ?? (saved ? '设置已保存' : '更改会保存在本机')}
+        </span>
         <button type="button" className="primary-button" onClick={() => void save()}>
           保存设置
         </button>
@@ -1061,4 +1095,8 @@ function compactNumber(value: number): string {
 
 function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))].sort((left, right) => left.localeCompare(right))
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }

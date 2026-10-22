@@ -41,7 +41,7 @@ test('renders live, token and analysis surfaces from local fixture data', async 
     await expect(page.getByText('系统与开发者指令')).toBeVisible()
     await expect(page.getByText('工具定义')).toBeVisible()
 
-    await page.getByLabel('打开分析中心').click()
+    await page.evaluate("window.betterCodexInfo.setSurface('analysis')")
     await expect(page.getByRole('heading', { name: 'Better Codex Info' })).toBeVisible()
     await expect(page.getByRole('button', { name: '历史' })).toBeVisible()
     await page.getByRole('button', { name: '速度', exact: true }).click()
@@ -92,6 +92,8 @@ test('packaged Windows application starts with bundled native dependencies', asy
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByLabel('Codex 会话统计').getByText('E2E session')).toBeVisible()
     await expect(page.getByLabel('打开 Token 用量')).toBeVisible()
+    await page.evaluate("window.betterCodexInfo.setSurface('analysis')")
+    await expect(page.getByRole('heading', { name: 'Better Codex Info' })).toBeVisible()
   } finally {
     await electronApp.close()
     await rm(sandbox, { recursive: true, force: true })

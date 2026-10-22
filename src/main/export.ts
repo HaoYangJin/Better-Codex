@@ -88,6 +88,7 @@ export function serializeCsv(source: ExportSource): string {
 }
 
 function csvCell(value: unknown): string {
-  const text = value == null ? '' : String(value)
+  const raw = value == null ? '' : String(value)
+  const text = /^[\s]*[=+\-@]/.test(raw) ? `'${raw}` : raw
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
 }

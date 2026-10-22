@@ -219,4 +219,5 @@ export interface BetterCodexInfoApi {
   setSurface(surface: OverlaySurface): Promise<void>
   onSnapshot(listener: (snapshot: SessionSnapshot | null) => void): () => void
   onIndexState(listener: (indexing: boolean) => void): () => void
+  onSurface(listener: (surface: OverlaySurface) => void): () => void
 }

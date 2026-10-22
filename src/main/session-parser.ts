@@ -91,7 +91,6 @@ interface ParseState {
   }
   seenMessageIds: Set<string>
   currentTurnId: string | null
-  sawExplicitSubagent: boolean
 }
 
 type JsonObject = Record<string, unknown>
@@ -153,8 +152,7 @@ function createState(
       conversation: 0
     },
     seenMessageIds: new Set(),
-    currentTurnId: null,
-    sawExplicitSubagent: false
+    currentTurnId: null
   }
 }
 
@@ -171,7 +169,7 @@ function consumeEntry(state: ParseState, entry: JsonObject): void {
     state.startedAt = state.startedAt || toEpochMs(meta.timestamp) || eventTime || Date.now()
     state.contextWeights.system += deepTextLength(meta.base_instructions)
     const source = meta.source
-    state.sawExplicitSubagent ||= isSubagentSource(source)
+    state.isSubagent ||= isSubagentSource(source)
     state.parentId ??= extractParentId(source)
     return
   }
@@ -353,8 +351,6 @@ function consumeResponseItem(state: ParseState, item: JsonObject): void {
   const length = itemTextLength(item)
   if (role === 'developer' || role === 'system') {
     state.contextWeights.system += length
-  } else if (elementIsSubagentMessage(item)) {
-    state.sawExplicitSubagent = true
   } else {
     state.contextWeights.conversation += length
   }
@@ -455,7 +451,6 @@ function finalize(state: ParseState, metadata?: ThreadMetadata): ParsedSession {
 
   const isSubagent =
     state.isSubagent ||
-    state.sawExplicitSubagent ||
     isSubagentSource(metadata?.source ?? '') ||
     /\/subagents?\//i.test(metadata?.cwd ?? '')
 
@@ -552,11 +547,6 @@ function isFailedItem(item: JsonObject): boolean {
   const status = stringValue(item.status).toLowerCase()
   const exitCode = numericValue(item.exit_code)
   return status === 'failed' || status === 'error' || (exitCode != null && exitCode !== 0)
-}
-
-function elementIsSubagentMessage(item: JsonObject): boolean {
-  const serialized = JSON.stringify(item)
-  return serialized.includes('subagent') && serialized.includes('parent_thread_id')
 }
 
 function isSubagentSource(source: unknown): boolean {

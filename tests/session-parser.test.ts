@@ -163,7 +163,7 @@ describe('session parser', () => {
           type: 'message',
           id: 'same-id',
           role: 'user',
-          content: [{ type: 'text', text: 'duplicate' }]
+          content: [{ type: 'text', text: 'subagent parent_thread_id duplicate' }]
         }
       },
       {
@@ -188,6 +188,7 @@ describe('session parser', () => {
     expect(result.snapshot.id).toBe('01a20000-0000-7000-8000-000000000002')
     expect(result.snapshot.rounds).toBe(0)
     expect(result.snapshot.usage.total).toBe(0)
+    expect(result.snapshot.isSubagent).toBe(false)
   })
 })
 

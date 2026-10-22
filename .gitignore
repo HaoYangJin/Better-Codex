@@ -6,8 +6,11 @@ playwright-report/
 test-results/
 *.log
 *.sqlite
+*.sqlite3
 *.sqlite-shm
+*.sqlite3-shm
 *.sqlite-wal
+*.sqlite3-wal
 *.tsbuildinfo
 *.pyc
 __pycache__/
