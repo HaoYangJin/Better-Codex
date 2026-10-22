@@ -9,5 +9,7 @@ test-results/
 *.sqlite-shm
 *.sqlite-wal
 *.tsbuildinfo
+*.pyc
+__pycache__/
 .DS_Store
 Thumbs.db
